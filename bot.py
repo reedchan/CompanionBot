@@ -87,7 +87,7 @@ def main(argv):
   try:
     assert(len(argv) > 1)
   except AssertionError:
-    print("Please specicfy the bot's token as an argument.")
+    print("Please specify the bot's token as an argument.")
     sys.exit(1)
   bot.run(argv[1])
 

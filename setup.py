@@ -91,13 +91,37 @@ def main(argv):
     print("Please specify what you would like to setup.")
     help(2)
   if (pokedex):
-    soup = getSoup(targetURL="http://bulbapedia.bulbagarden.net/wiki/List_of_Pok%C3%A9mon_by_National_Pok%C3%A9dex_number",
+    baseURL = "http://bulbapedia.bulbagarden.net"
+    regions = {"Kanto", "Johto", "Hoenn", "Sinnoh", "Unova", "Kalos", "Alola"}
+    soup = getSoup(targetURL="%s%s"%(baseURL, "/wiki/List_of_Pok%C3%A9mon_by_National_Pok%C3%A9dex_number"),
                    errorMsg="")
     tables = soup.find_all("table")
-    print(tables[1])
-    # saveDict(writeDict=nationalDex,
-             # writeFile="pokedex.json",
-             # errorMsg="Error writing pokedex to pokedex.json")
+    # tables[1] should be Kanto
+    # tables[2] should be Johto
+    # tables[3] should be Hoenn
+    # tables[4] should be Sinnoh
+    # tables[5] should be Unova
+    # tables[6] should be Kalos
+    # tables[7] should be Alola
+    for tableBody in tables:
+      # not isdisjoint checks if any of the regions is in the table titles
+      # can check tables[i].th.a["title"] for Kanto-Kalos, but not Alola
+      # regions.isdisjoint(str(tables[1].th).split(" "))
+      if ((tableBody is tables[7]) or
+          (not regions.isdisjoint(str(tableBody.th).split(" ")))):
+        rows = tableBody.find_all("tr")
+        for row in rows:
+          for link in row.find_all("a"):
+            url = link.get("href")
+            if (("Pok%C3%A9mon" in url) and (not "list" in url.lower())):
+              pokemon = url.lower().replace("/wiki/", "").replace("_(pok%c3%a9mon)", "")
+              nationalDex[pokemon] = baseURL + url
+      # It's not a table that we're interested in
+      else:
+        continue
+    saveDict(writeDict=nationalDex,
+             writeFile="pokedex.json",
+             errorMsg="Error writing pokedex to pokedex.json")
     pass
   if (prefixes):
     soup = getSoup(targetURL="http://terraria.gamepedia.com/Prefix_IDs",
