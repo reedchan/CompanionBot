@@ -1,14 +1,16 @@
 import discord
 import json
 import random
+import re
 from discord.ext import commands
-from sys import argv
+from sys import argv, exit
 
 description = '''An example bot to showcase the discord.ext.commands extension
 module.
 There are a number of utility commands being showcased here.'''
 bot = commands.Bot(command_prefix='!', description=description)
-prefixDict = None
+nationalDex = dict()
+prefixDict = dict()
 
 @bot.event
 async def on_ready():
@@ -74,22 +76,48 @@ async def terraria(search: str):
       await bot.say("```%s: %s```" % (prefix, id))
   else:
     await bot.say("```Please specify the prefix you would like to look up.```")
-
-def main(argv):
-  global prefixDict
+    
+@bot.command()
+async def pokemon(*search: str):
+  species = "_".join(search).lower()
+  species = species.replace("mega_", "")
+  if (species in nationalDex):
+    # await bot.say("```%s```" % nationalDex[species])
+    await bot.say("%s" % nationalDex[species])
+  # For people who are too lazy to type the apostrophe
+  elif (species == "farfetchd"):
+    await bot.say("%s" % nationalDex["farfetch'd"])
+  # For people who are too lazy to type the colon
+  elif (species == "type_null"):
+    await bot.say("%s" % nationalDex["type:_null"])
+  
+# Safely load a dictionary that has been saved to readFile, a JSON file, and
+# return the dictionary
+def loadDict(readFile):
+  d = dict()
   try:
-    f = open("terrariaPrefixes.json", 'r')
-    prefixDict = json.loads(f.read())
+    f = open(readFile, 'r')
+    d = json.loads(f.read())
     f.close()
   except Exception as e:
     print(e)
-    sys.exit(1)
+    exit(1)
+  return d
+
+def main(argv):
+  global nationalDex, prefixDict
+  nationalDex = loadDict("pokedex.json")
+  prefixDict  = loadDict("terrariaPrefixes.json")
   try:
     assert(len(argv) > 1)
   except AssertionError:
     print("Please specify the bot's token as an argument.")
-    sys.exit(1)
-  bot.run(argv[1])
+    exit(1)
+  try:
+    bot.run(argv[1])
+  except Exception as e:
+    print(e)
+    exit(1)
 
 if __name__ == '__main__':
   main(argv)

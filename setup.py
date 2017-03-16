@@ -1,18 +1,12 @@
 import getopt
 import io
 import json
+import re
 import urllib.error
 import urllib.request
 from bs4 import BeautifulSoup
 from os import path
 from sys import argv, exit
-
-# Import ElementTree as etree to parse the HTML tables for the prefixes
-try:
-  from defusedxml import ElementTree as etree
-except ImportError:
-  print("Please install defusedxml to safely parse the HTML tables.")
-  from xml.etree import ElementTree as etree
 
 user_agent = 'Mozilla/5.0 (Windows; U; Windows NT 10.0; rv:10.0) Gecko/20100101 Firefox/52.0'
 sendHeader={'User-Agent':user_agent,}
@@ -32,6 +26,92 @@ Usage: %s [options...]
 """ % path.split(__file__)[1]
   print(info)
   exit(returnCode)
+  
+# Takes in soup, a BeautifulSoup object of a Pokemon's Bulbapedia page, and the
+# Pokemon's name in order to return a formatted string with relevant info about
+# the Pokemon
+def getPokemon(soup, pokemon):
+  infoTable = soup.find_all(name="table", style=re.compile("float:right*"))
+  # Pokemon info
+  embedImg = "" # Image of the Pokemon
+  natDexNo = "" # National Pokédex number
+  pokeText = "" # Pokemon text e.g. "Seed Pokemon" for Bulbasaur
+  # tempImg = None
+  prettyPoke = " ".join(p.capitalize() for p in pokemon.split("_"))
+  try:
+    assert(len(infoTable) == 1)
+  except:
+    print("Page layout changed - Need to update the bot")
+  infoTable = infoTable[0]
+  # pokeSplit = pokemon.split(" ")
+  # searchPoke = "_".join(poke.capitalize() for poke in pokeSplit)
+  # searchPoke = searchPoke.replace(":", "")
+  # embedImg = infoTable.find(name="a", title=re.compile(pokemon.capitalize()))
+  # embedImg = infoTable.find(name="a", title=re.compile(searchPoke, flags=re.ASCII))
+  # embedImg = infoTable.find(name="a", title=re.compile(searchPoke,))
+  # Be careful with the following pokemon
+  # sawsbuck
+  # farfetchd
+  # type: null
+  # tapu koko
+  # meloetta
+  try:
+    embedImg = infoTable.find(name="a", attrs={"class": "image"})
+    embedImg = embedImg.find(name="img")
+    embedImg = embedImg.get("src")
+  except Exception as e:
+    print(e)
+    print("Error getting embedImg for %s" % prettyPoke)
+    exit(1)
+  try:
+    pokeText = infoTable.find(name="a", title=re.compile("Pok.mon category"))
+    pokeText = pokeText.string
+  except Exception as e:
+    print(e)
+    print("Error getting pokeText for %s" % prettyPoke)
+    exit(1)
+  try:
+    dexRE = re.compile("List of Pokémon by National Pokédex number")
+    natDexNo = infoTable.find(name="a", title=dexRE)
+    natDexNo = natDexNo.string
+  except Exception as e:
+    print(e)
+    print("Error getting National Pokédex number for %s" % prettyPoke)
+    exit(1)
+  # try:
+    # assert(embedImg != None)
+  # except Exception as e:
+    # print(infoTable)
+    # print(pokemon)
+    # exit(1)
+  # try:
+    # tempImg = embedImg
+    # embedImg = embedImg.find(name="img")
+    # assert(embedImg != None)
+    # tempImg = embedImg
+    # embedImg = embedImg.get("src")
+  # except Exception as e:
+    # print(e)
+    # print(tempImg)
+    # print(infoTable)
+    # exit(1)
+  # print(embedImg.find(name="img"))
+  # not attrs
+  # not .get("src")
+  # not .get("img alt")
+  # not .find("img alt")
+  # print(embedImg)
+  # tables[0].find(name="a", title=re.compile("[bB]ulbasaur"))
+  # ^ Abov
+  # base stats
+  # name
+  # types
+  # abilities
+  # national dex number
+  # embed link of pokemon?
+  # also return bulbapedia link for more info
+  # return infoString
+  return prettyPoke
 
 # Send a GET request to targetURL, read the data from the response, and return
 # it as a BeautifulSoup object
@@ -113,42 +193,49 @@ def main(argv):
         for row in rows:
           for link in row.find_all("a"):
             url = link.get("href")
-            if (("Pok%C3%A9mon" in url) and (not "list" in url.lower())):
-              pokemon = url.lower().replace("/wiki/", "").replace("_(pok%c3%a9mon)", "")
+            urlLower = url.lower()
+            if (("Pok%C3%A9mon" in url) and (not "list" in urlLower)):
+              urlRE   = re.compile("(/wiki/)|(_\(pok%c3%a9mon\))")
+              pokemon = re.sub(urlRE, "", urlLower)
+              pokemon = pokemon.replace("%27", "'")
+              url     = url.replace("%27", "'")
               nationalDex[pokemon] = baseURL + url
       # It's not a table that we're interested in
       else:
         continue
+    for key in nationalDex:
+      soup = getSoup(targetURL=nationalDex[key],
+                     errorMsg="")
+      infoString = getPokemon(soup, key)
+      nationalDex[key] = infoString
     saveDict(writeDict=nationalDex,
              writeFile="pokedex.json",
              errorMsg="Error writing pokedex to pokedex.json")
-    pass
   if (prefixes):
     soup = getSoup(targetURL="http://terraria.gamepedia.com/Prefix_IDs",
                    errorMsg="")
     # Get the tables
     tables = soup.find_all("table")
-    try:
-      assert(len(tables) > 1)
-      assert(tables[1]["class"] == ["terraria", "sortable"])
-    except AssertionError:
-      print("Page layout changed - script must be updated")
-      exit(1)
-    # Get the second table which should contain the prefix table
-    # Next line works for xml.etree.ElementTree and for defusedxml.ElementTree
-    table = etree.XML(str(tables[1]))
-    for row in table:
-      # Convert to lowercase and strip whitespace
-      prefix  = row[0].text.lower().strip()
-      id      = row[1].text.lower().strip()
-      # Ignore the table headers
-      if ((prefix == "prefix") or (id == "value")):
-        continue
+    for tableBody in tables:
+      # Select the correct table
+      if (tableBody.attrs == {'class': ['terraria', 'sortable']}):
+        rows = tableBody.find_all("tr")
+        for row in rows:
+          cols = row.find_all("td")
+          if (len(cols) == 2):
+            prefix  = cols[0].string.lower().strip()
+            id      = cols[1].string.lower().strip()
+            # Prefix that has multiple IDs
+            if (prefix in prefixDict):
+              prefixDict[prefix] = [prefixDict[prefix], id]
+            else:
+              prefixDict[prefix] = id
+          # Ignore the table headers
+          else:
+            assert(len(row.find_all("th")) != 0)
+            continue
       else:
-        if (prefix in prefixDict):
-          prefixDict[prefix] = [prefixDict[prefix], id]
-        else:
-          prefixDict[prefix] = id
+        continue
     saveDict(writeDict=prefixDict,
              writeFile="terrariaPrefixes.json",
              errorMsg="Error writing prefixes to terrariaPrefixes.json")
