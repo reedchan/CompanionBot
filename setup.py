@@ -33,10 +33,10 @@ Usage: %s [options...]
 def getPokemon(soup, pokemon):
   infoTable = soup.find_all(name="table", style=re.compile("float:right*"))
   # Pokemon info
-  embedImg = "" # Image of the Pokemon
-  natDexNo = "" # National Pokédex number
-  pokeText = "" # Pokemon text e.g. "Seed Pokemon" for Bulbasaur
-  # tempImg = None
+  embedImg  = "" # Image of the Pokemon
+  natDexNo  = "" # National Pokédex number
+  pokeText  = "" # Pokemon text e.g. "Seed Pokemon" for Bulbasaur
+  pokeTypes = [] # Pokemon types
   prettyPoke = " ".join(p.capitalize() for p in pokemon.split("_"))
   try:
     assert(len(infoTable) == 1)
@@ -76,7 +76,39 @@ def getPokemon(soup, pokemon):
     natDexNo = natDexNo.string
   except Exception as e:
     print(e)
-    print("Error getting National Pokédex number for %s" % prettyPoke)
+    print("Error getting National Pokedex number for %s" % prettyPoke)
+    exit(1)
+  try:
+    typeRE = re.compile("(?<!Unknown )\(type\)")
+    types = infoTable.find_all(name="a", title=typeRE)
+    typeSet = []
+    tempTypes = []
+    for type in types:
+      tempTable = type.find_parent("table")
+      add = True
+      for setTable in typeSet:
+        if (tempTable is setTable):
+          add = False
+      if (add):
+        typeSet += [tempTable]
+    # Mega evolutions that may be a different type
+    if (len(typeSet) > 1):
+      while(len(typeSet) > 0):
+        typeTable = typeSet.pop()
+        tempTypes = [typeTable.find_parent("td").find("small").string]
+        for type in typeTable.find_all(name="a", title=typeRE):
+          tempTypes += [type.string]
+        pokeTypes += [tempTypes]
+    # No mega evolutions
+    else:
+      tempTypes += [prettyPoke]
+      for type in types:
+        tempTypes += [type.string]
+        # tempTypes.add(type.string)
+      pokeTypes += [tempTypes]
+  except Exception as e:
+    print(e)
+    print("Error getting types for %s" % prettyPoke)
     exit(1)
   # try:
     # assert(embedImg != None)
@@ -111,7 +143,7 @@ def getPokemon(soup, pokemon):
   # embed link of pokemon?
   # also return bulbapedia link for more info
   # return infoString
-  return prettyPoke
+  return pokeTypes
 
 # Send a GET request to targetURL, read the data from the response, and return
 # it as a BeautifulSoup object
@@ -171,6 +203,7 @@ def main(argv):
     print("Please specify what you would like to setup.")
     help(2)
   if (pokedex):
+    print("Preparing Pokédex (this may take a while)...")
     baseURL = "http://bulbapedia.bulbagarden.net"
     regions = {"Kanto", "Johto", "Hoenn", "Sinnoh", "Unova", "Kalos", "Alola"}
     soup = getSoup(targetURL="%s%s"%(baseURL, "/wiki/List_of_Pok%C3%A9mon_by_National_Pok%C3%A9dex_number"),
@@ -195,10 +228,20 @@ def main(argv):
             url = link.get("href")
             urlLower = url.lower()
             if (("Pok%C3%A9mon" in url) and (not "list" in urlLower)):
+              url     = url.replace("%27", "'")
               urlRE   = re.compile("(/wiki/)|(_\(pok%c3%a9mon\))")
               pokemon = re.sub(urlRE, "", urlLower)
-              pokemon = pokemon.replace("%27", "'")
-              url     = url.replace("%27", "'")
+              # Farfetch'd
+              if (pokemon.startswith("farfetch")):
+                pokemon = pokemon.replace("%27", "'")
+              elif (pokemon.startswith("nidoran")):
+                # Nidoran F
+                pokemon = pokemon.replace("%e2%99%80", " (f)")
+                # Nidoran M
+                pokemon = pokemon.replace("%e2%99%82", " (m)")
+              # Flabébé
+              elif (pokemon.startswith("flab")):
+                pokemon = pokemon.replace("%c3%a9", "é")
               nationalDex[pokemon] = baseURL + url
       # It's not a table that we're interested in
       else:
@@ -211,7 +254,9 @@ def main(argv):
     saveDict(writeDict=nationalDex,
              writeFile="pokedex.json",
              errorMsg="Error writing pokedex to pokedex.json")
+    print("Done!")
   if (prefixes):
+    print("Preparing Terraria prefixes...")
     soup = getSoup(targetURL="http://terraria.gamepedia.com/Prefix_IDs",
                    errorMsg="")
     # Get the tables
@@ -239,6 +284,7 @@ def main(argv):
     saveDict(writeDict=prefixDict,
              writeFile="terrariaPrefixes.json",
              errorMsg="Error writing prefixes to terrariaPrefixes.json")
+    print("Done!")
   return
 
 if __name__ == '__main__':

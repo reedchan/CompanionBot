@@ -87,10 +87,16 @@ async def pokemon(*search: str):
   # For people who are too lazy to type the apostrophe
   elif (species == "farfetchd"):
     await bot.say("%s" % nationalDex["farfetch'd"])
+  # Simplify searching for Flabébé
+  elif (species == "flabebe"):
+    await bot.say("%s" % nationalDex["flabébé"])
   # For people who are too lazy to type the colon
   elif (species == "type_null"):
     await bot.say("%s" % nationalDex["type:_null"])
-  
+  # Specify Nidoran (M) or (F)
+  elif (species == "nidoran"):
+    await bot.say("```Please specify 'nidoran (f)' or 'nidoran (m)'```")
+    
 # Safely load a dictionary that has been saved to readFile, a JSON file, and
 # return the dictionary
 def loadDict(readFile):
