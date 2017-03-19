@@ -31,6 +31,8 @@ Usage: %s [options...]
 # Pokemon's name in order to return a formatted string with relevant info about
 # the Pokemon
 def getPokemon(soup, pokemon):
+  # Dictionary with the Pokemon's info
+  pokeDict = dict()
   infoTable = soup.find_all(name="table", style=re.compile("float:right*"))
   # Pokemon info
   embedImg  = "" # Image of the Pokemon
@@ -43,29 +45,38 @@ def getPokemon(soup, pokemon):
   except:
     print("Page layout changed - Need to update the bot")
   infoTable = infoTable[0]
-  # pokeSplit = pokemon.split(" ")
-  # searchPoke = "_".join(poke.capitalize() for poke in pokeSplit)
-  # searchPoke = searchPoke.replace(":", "")
-  # embedImg = infoTable.find(name="a", title=re.compile(pokemon.capitalize()))
-  # embedImg = infoTable.find(name="a", title=re.compile(searchPoke, flags=re.ASCII))
-  # embedImg = infoTable.find(name="a", title=re.compile(searchPoke,))
   # Be careful with the following pokemon
-  # sawsbuck
-  # farfetchd
-  # type: null
-  # tapu koko
+  # sawsbuck  (image)
+  # farfetchd (apostrophe in the name)
+  # type: null (space in the name)
+  # tapu koko (space in the name)
   # meloetta
+  # nidoran (special char in the name)
+  # charizard (multiple megas)
+  # zigzagoon (something about the pokemon category)
+  # azumarill (something about the pokemon category)
   try:
     embedImg = infoTable.find(name="a", attrs={"class": "image"})
     embedImg = embedImg.find(name="img")
     embedImg = embedImg.get("src")
+    pokeDict["img"] = embedImg
   except Exception as e:
     print(e)
     print("Error getting embedImg for %s" % prettyPoke)
     exit(1)
   try:
     pokeText = infoTable.find(name="a", title=re.compile("Pok.mon category"))
-    pokeText = pokeText.string
+    # Have the Pokemon category
+    if (not pokeText.string is None):
+      pokeText = pokeText.string
+    # Pokemon category has an explanation on Bulbapedia
+    else:
+      pokeText = pokeText.find(name="span", attrs={"class": "explain"})
+      pokeText = pokeText.string
+    if (not " Pok\u00e9mon" in pokeText):
+      pokeText = pokeText + " Pok\u00e9mon"
+    # Cannot write 'é' to a file"
+    pokeDict["category"] = pokeText
   except Exception as e:
     print(e)
     print("Error getting pokeText for %s" % prettyPoke)
@@ -74,6 +85,7 @@ def getPokemon(soup, pokemon):
     dexRE = re.compile("List of Pokémon by National Pokédex number")
     natDexNo = infoTable.find(name="a", title=dexRE)
     natDexNo = natDexNo.string
+    pokeDict["natDexNo"] = natDexNo
   except Exception as e:
     print(e)
     print("Error getting National Pokedex number for %s" % prettyPoke)
@@ -106,6 +118,7 @@ def getPokemon(soup, pokemon):
         tempTypes += [type.string]
         # tempTypes.add(type.string)
       pokeTypes += [tempTypes]
+    pokeDict["types"] = pokeTypes
   except Exception as e:
     print(e)
     print("Error getting types for %s" % prettyPoke)
@@ -143,7 +156,7 @@ def getPokemon(soup, pokemon):
   # embed link of pokemon?
   # also return bulbapedia link for more info
   # return infoString
-  return pokeTypes
+  return pokeDict
 
 # Send a GET request to targetURL, read the data from the response, and return
 # it as a BeautifulSoup object
@@ -236,21 +249,24 @@ def main(argv):
                 pokemon = pokemon.replace("%27", "'")
               elif (pokemon.startswith("nidoran")):
                 # Nidoran F
-                pokemon = pokemon.replace("%e2%99%80", " (f)")
+                pokemon = pokemon.replace("%e2%99%80", "_(f)")
                 # Nidoran M
-                pokemon = pokemon.replace("%e2%99%82", " (m)")
+                pokemon = pokemon.replace("%e2%99%82", "_(m)")
               # Flabébé
               elif (pokemon.startswith("flab")):
                 pokemon = pokemon.replace("%c3%a9", "é")
-              nationalDex[pokemon] = baseURL + url
+              tempDict= dict()
+              tempDict["url"] = baseURL + url
+              nationalDex[pokemon] = tempDict
       # It's not a table that we're interested in
       else:
         continue
     for key in nationalDex:
-      soup = getSoup(targetURL=nationalDex[key],
+      tempDict = nationalDex[key]
+      soup = getSoup(targetURL=tempDict["url"],
                      errorMsg="")
-      infoString = getPokemon(soup, key)
-      nationalDex[key] = infoString
+      tempDict.update(getPokemon(soup, key))
+      nationalDex[key] = tempDict
     saveDict(writeDict=nationalDex,
              writeFile="pokedex.json",
              errorMsg="Error writing pokedex to pokedex.json")
