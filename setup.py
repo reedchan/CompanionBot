@@ -35,10 +35,12 @@ def getPokemon(soup, pokemon):
   pokeDict = dict()
   infoTable = soup.find_all(name="table", style=re.compile("float:right*"))
   # Pokemon info
-  embedImg  = "" # Image of the Pokemon
-  natDexNo  = "" # National Pokédex number
-  pokeText  = "" # Pokemon text e.g. "Seed Pokemon" for Bulbasaur
-  pokeTypes = [] # Pokemon types
+  embedImg  = ""      # Image of the Pokemon
+  natDexNo  = ""      # National Pokédex number
+  abilities = dict()  # Pokemon abilities
+  pokeText  = ""      # Pokemon text e.g. "Seed Pokemon" for Bulbasaur
+  pokeTypes = []      # Pokemon types
+  abilities = dict()  # Pokemon abilities
   prettyPoke = " ".join(p.capitalize() for p in pokemon.split("_"))
   try:
     assert(len(infoTable) == 1)
@@ -70,6 +72,7 @@ def getPokemon(soup, pokemon):
     if (not pokeText.string is None):
       pokeText = pokeText.string
     # Pokemon category has an explanation on Bulbapedia
+    # i.e. if you hover over it
     else:
       pokeText = pokeText.find(name="span", attrs={"class": "explain"})
       pokeText = pokeText.string
@@ -116,46 +119,44 @@ def getPokemon(soup, pokemon):
       tempTypes += [prettyPoke]
       for type in types:
         tempTypes += [type.string]
-        # tempTypes.add(type.string)
       pokeTypes += [tempTypes]
     pokeDict["types"] = pokeTypes
   except Exception as e:
     print(e)
     print("Error getting types for %s" % prettyPoke)
     exit(1)
-  # try:
-    # assert(embedImg != None)
-  # except Exception as e:
-    # print(infoTable)
-    # print(pokemon)
-    # exit(1)
-  # try:
-    # tempImg = embedImg
-    # embedImg = embedImg.find(name="img")
-    # assert(embedImg != None)
-    # tempImg = embedImg
-    # embedImg = embedImg.get("src")
-  # except Exception as e:
-    # print(e)
-    # print(tempImg)
-    # print(infoTable)
-    # exit(1)
-  # print(embedImg.find(name="img"))
-  # not attrs
-  # not .get("src")
-  # not .get("img alt")
-  # not .find("img alt")
-  # print(embedImg)
-  # tables[0].find(name="a", title=re.compile("[bB]ulbasaur"))
-  # ^ Abov
-  # base stats
-  # name
-  # types
+  try:
+    # Find the link in the table for abilities
+    abilityLink = infoTable.find(name="a", title="Ability")
+    assert(abilityLink != None)
+    # Find the parent table
+    abilitiesTable = abilityLink.find_parent(name="td")
+    # Find all of the table cells that will have the abilities
+    abilitiesCells = abilitiesTable.find_all(name="td")
+    for ability in abilitiesCells:
+      # Filter out abilities that aren't displayed
+      # e.g. unused "Cacophony" ability
+      if (("style" in ability.attrs) and
+          ("display: none" in ability.attrs["style"])):
+        continue
+      else:
+        try:
+          # Subtitles (e.g. "Hidden Ability", "Mega Charizard X", etc.)
+          key = ability.small.string.strip()
+        # No subtitle which implies that it's a normal ability so leave it blank
+        except:
+          key = prettyPoke
+        if (key in abilities):
+          abilities[key] = abilities[key] + ";" + ability.a.string
+        else:
+          abilities[key] = ability.a.string
+    pokeDict["abilities"] = abilities
+  except Exception as e:
+    print(e)
+    print("Error getting hidden abilities for %s" % prettyPoke)
+    exit(1)
   # abilities
-  # national dex number
-  # embed link of pokemon?
-  # also return bulbapedia link for more info
-  # return infoString
+  # base stats
   return pokeDict
 
 # Send a GET request to targetURL, read the data from the response, and return

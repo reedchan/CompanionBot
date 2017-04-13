@@ -1,13 +1,12 @@
 import discord
+import getopt
 import json
 import random
 import re
 
 from discord.ext import commands
+from os import path
 from sys import argv, exit
-
-# Import the music features
-from playlist import Music, VoiceEntry, VoiceState
 
 description = """\
 A rudimentary bot based on discord.py's basic_bot.py and discord.py's \
@@ -15,19 +14,20 @@ playlist.py. Please report any issues at https://github.com/reedchan/companionbo
 """
 bot = commands.Bot(command_prefix=commands.when_mentioned_or("!"),
                    description=description)
-bot.add_cog(Music(bot))
 botGameStatus       = discord.Game()
 botGameStatus.name  = "CompanionBot at github.com/reedchan/CompanionBot"
 nationalDex = dict()
 prefixDict  = dict()
 
-if not discord.opus.is_loaded():
-    # the 'opus' library here is opus.dll on windows
-    # or libopus.so on linux in the current directory
-    # you should replace this with the location the
-    # opus library is located in and with the proper filename.
-    # note that on windows this DLL is automatically provided for you
-    discord.opus.load_opus('opus')
+def help(returnCode):
+  info = """\
+Usage: %s [options...]
+  -h, --help        Print this help message
+  -m, --music       Add music playback functionality to the bot
+  -t, --token       Specify the bot's token to run it
+""" % path.split(__file__)[1]
+  print(info)
+  exit(returnCode)
 
 @bot.event
 async def on_ready():
@@ -134,19 +134,51 @@ def loadDict(readFile):
   return d
 
 def main(argv):
-  global nationalDex, prefixDict
-  nationalDex = loadDict("pokedex.json")
-  prefixDict  = loadDict("terrariaPrefixes.json")
+  global bot, nationalDex, prefixDict
+  shortOpts = "hmt:"
+  longOpts = ["help", "music", "token="]
+  token = ""
   try:
-    assert(len(argv) > 1)
+    opts, args = getopt.getopt(argv[1:], shortOpts, longOpts)
+  except Exception as e:
+    print(e)
+    help(2)
+  for (o, a) in opts:
+    if (o in ("-h", "--help")):
+      help(2)
+    elif (o in ("-m", "--music")):
+      try:
+        # Import the music features
+        from playlist import Music, VoiceEntry, VoiceState
+        if not discord.opus.is_loaded():
+            # the 'opus' library here is opus.dll on windows
+            # or libopus.so on linux in the current directory
+            # you should replace this with the location the
+            # opus library is located in and with the proper filename.
+            # note that on windows this DLL is automatically provided for you
+            discord.opus.load_opus('opus')
+        bot.add_cog(Music(bot))
+      except Exception as e:
+        print(e)
+        exit(1)
+    elif (o in ("-t", "--token")):
+      token = a
+  try:
+    assert(token != "")
   except AssertionError:
     print("Please specify the bot's token as an argument.")
     exit(1)
-  try:
-    bot.run(argv[1])
   except Exception as e:
     print(e)
     exit(1)
+  nationalDex = loadDict("pokedex.json")
+  prefixDict  = loadDict("terrariaPrefixes.json")
+  try:
+    bot.run(token)
+  except Exception as e:
+    print(e)
+    exit(1)
+  return
 
 if __name__ == '__main__':
   main(argv)
