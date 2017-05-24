@@ -81,6 +81,7 @@ async def pokemon(*search: str):
   # Simplify searching for Flabébé
   elif (species == "flabebe"):
     await bot.say("%s" % nationalDex["flabébé"])
+    # await bot.say("%s" % nationalDex["flab\u00e9b\u00e9"])
   # For people who are too lazy to type the colon
   elif (species == "type_null"):
     await bot.say("%s" % nationalDex["type:_null"])

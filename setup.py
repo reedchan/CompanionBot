@@ -8,6 +8,8 @@ from bs4 import BeautifulSoup
 from os import path
 from sys import argv, exit
 
+import time
+
 user_agent = 'Mozilla/5.0 (Windows; U; Windows NT 10.0; rv:10.0) Gecko/20100101 Firefox/52.0'
 sendHeader={'User-Agent':user_agent,}
 
@@ -39,7 +41,8 @@ def getPokemon(soup, pokemon):
   natDexNo  = ""      # National Pokédex number
   abilities = dict()  # Pokemon abilities
   pokeText  = ""      # Pokemon text e.g. "Seed Pokemon" for Bulbasaur
-  pokeTypes = []      # Pokemon types
+  # pokeTypes = []      # Pokemon types
+  pokeTypes = dict()  # Pokemon types
   abilities = dict()  # Pokemon abilities
   prettyPoke = " ".join(p.capitalize() for p in pokemon.split("_"))
   try:
@@ -110,16 +113,27 @@ def getPokemon(soup, pokemon):
     if (len(typeSet) > 1):
       while(len(typeSet) > 0):
         typeTable = typeSet.pop()
-        tempTypes = [typeTable.find_parent("td").find("small").string]
+        # tempTypes = [typeTable.find_parent("td").find("small").string]
+        key = typeTable.find_parent("td").find("small").string
         for type in typeTable.find_all(name="a", title=typeRE):
-          tempTypes += [type.string]
-        pokeTypes += [tempTypes]
+          if (key in pokeTypes):
+            pokeTypes[key] = pokeTypes[key] + ";" + type.string
+          else:
+            pokeTypes[key] = type.string
+          # tempTypes += [type.string]
+        # pokeTypes += [tempTypes]
     # No mega evolutions
     else:
-      tempTypes += [prettyPoke]
+      # tempTypes += [prettyPoke]
+      key = prettyPoke
       for type in types:
-        tempTypes += [type.string]
-      pokeTypes += [tempTypes]
+        if (key in pokeTypes):
+          pokeTypes[key] = pokeTypes[key] + ";" + type.string
+        else:
+          pokeTypes[key] = type.string
+        # tempTypes += [type.string]
+      # pokeTypes += [tempTypes]
+      # pokeTypes += [tempTypes]
     pokeDict["types"] = pokeTypes
   except Exception as e:
     print(e)
@@ -158,7 +172,7 @@ def getPokemon(soup, pokemon):
   # abilities
   # base stats
   return pokeDict
-
+  
 # Send a GET request to targetURL, read the data from the response, and return
 # it as a BeautifulSoup object
 # Print errorMsg if there is an exception raised by urllib or by BeautifulSoup
@@ -192,6 +206,7 @@ def saveDict(writeDict, writeFile, errorMsg):
   return
 
 def main(argv):
+  start = time.time()
   shortOpts = "ahpt"
   longOpts = ["all", "help", "pokemon", "terraria"]
   try:
@@ -268,10 +283,6 @@ def main(argv):
                      errorMsg="")
       tempDict.update(getPokemon(soup, key))
       nationalDex[key] = tempDict
-    saveDict(writeDict=nationalDex,
-             writeFile="pokedex.json",
-             errorMsg="Error writing pokedex to pokedex.json")
-    print("Done!")
   if (prefixes):
     print("Preparing Terraria prefixes...")
     soup = getSoup(targetURL="http://terraria.gamepedia.com/Prefix_IDs",
@@ -298,10 +309,19 @@ def main(argv):
             continue
       else:
         continue
+  if (pokedex):
+    print("Writing pokedex to pokedex.json...")
+    saveDict(writeDict=nationalDex,
+             writeFile="pokedex.json",
+             errorMsg="Error writing pokedex to pokedex.json")
+    print("Done!")
+  if (prefixes):
+    print("Writing prefixes to terrariaPrefixes.json...")
     saveDict(writeDict=prefixDict,
              writeFile="terrariaPrefixes.json",
              errorMsg="Error writing prefixes to terrariaPrefixes.json")
     print("Done!")
+  print("Took %d seconds" % (time.time() - start))
   return
 
 if __name__ == '__main__':
