@@ -5,21 +5,19 @@ import getopt
 import io
 import json
 import re
-import urllib.error
-import urllib.request
 from bs4 import BeautifulSoup
 from os import path
 from sys import argv, exit
 
 from setup import getPokemon, getSoup
 
-import time
-
 user_agent = 'Mozilla/5.0 (Windows; U; Windows NT 10.0; rv:10.0) Gecko/20100101 Firefox/52.0'
 sendHeader={'User-Agent':user_agent,}
 
 # Dictionary for the national Pokédex
 nationalDex = dict()
+# Dictionary for the Terraria prefixes
+prefixDict  = dict()
 
 def help(returnCode):
   info = """\
@@ -45,12 +43,17 @@ def saveDict(writeDict, writeFile, errorMsg):
     exit(1)
   return
   
-def getDexURL():
+async def getDexURL(session):
   global nationalDex
   baseURL = "http://bulbapedia.bulbagarden.net"
+  async with session.get("%s%s"%(baseURL, "/wiki/List_of_Pok%C3%A9mon_by_National_Pok%C3%A9dex_number")) as response:
+    try:
+      assert(response.status == 200)
+      data = await response.read()
+      soup = BeautifulSoup(data, "html.parser")
+    except Exception as e:
+      print(e)
   regions = {"Kanto", "Johto", "Hoenn", "Sinnoh", "Unova", "Kalos", "Alola"}
-  soup = getSoup(targetURL="%s%s"%(baseURL, "/wiki/List_of_Pok%C3%A9mon_by_National_Pok%C3%A9dex_number"),
-                 errorMsg="")
   tables = soup.find_all("table")
   for tableBody in tables:
     # not isdisjoint checks if any of the regions is in the table titles
@@ -86,43 +89,80 @@ def getDexURL():
       continue
   return
   
-async def getPokeInfo(mutex, key, session):
+async def getPrefixes(session):
+  global prefixDict
+  async with session.get("http://terraria.gamepedia.com/Prefix_IDs") as response:
+    try:
+      assert(response.status == 200)
+      data = await response.read()
+      soup = BeautifulSoup(data, "html.parser")
+    except Exception as e:
+      print(e)
+  # Get the tables
+  tables = soup.find_all("table")
+  for tableBody in tables:
+    # Select the correct table
+    if (tableBody.attrs == {'class': ['terraria', 'sortable']}):
+      rows = tableBody.find_all("tr")
+      for row in rows:
+        cols = row.find_all("td")
+        if (len(cols) == 2):
+          prefix  = cols[0].string.lower().strip()
+          id      = cols[1].string.lower().strip()
+          # Prefix that has multiple IDs
+          if (prefix in prefixDict):
+            prefixDict[prefix] = [prefixDict[prefix], id]
+          else:
+            prefixDict[prefix] = id
+        # Ignore the table headers
+        else:
+          assert(len(row.find_all("th")) != 0)
+          continue
+    else:
+      continue
+  return
+  
+async def getPokeInfo(key, session):
   tempDict = nationalDex[key]
   async with session.get(tempDict["url"]) as response:
     try:
       assert(response.status == 200)
       data = await response.read()
       soup = BeautifulSoup(data, "html.parser")
-      tempDict.update(getPokemon(soup, key))
-      # await mutex.acquire()
-      nationalDex[key] = tempDict
-      # print(tempDict)
-      # mutex.release()
     except Exception as e:
       print(e)
+  tempDict.update(getPokemon(soup, key))
+  nationalDex[key] = tempDict
   return
 
-async def limitGetPokeInfo(sem, mutex, key, session):
+async def limitGetPokeInfo(sem, key, session):
   async with sem:
-    await getPokeInfo(mutex, key, session)
+    await getPokeInfo(key, session)
   
 async def getPokedex():
   # Semaphore to limit the maximum number of concurrent requests
-  sem = asyncio.Semaphore(100)
-  # Semaphore to ensure nationalDex correctness
-  mutex = asyncio.Semaphore(1)
+  sem = asyncio.Semaphore(128)
   tasks = []
   # Share a client session so it will not open a new session for each request
   async with aiohttp.ClientSession() as session:
     for key in nationalDex:
-      task = asyncio.ensure_future(limitGetPokeInfo(sem, mutex, key, session))
+      task = asyncio.ensure_future(limitGetPokeInfo(sem, key, session))
       tasks.append(task)
-      # url = nationalDex[key]["url"]
-    await asyncio.gather(*tasks)
-  # asd
+    await asyncio.wait(tasks)
+  return
+  
+async def setup():
+  # Semaphore to limit the maximum number of concurrent requests
+  sem = asyncio.Semaphore(128)
+  tasks = []
+  # Share a client session so it will not open a new session for each request
+  async with aiohttp.ClientSession() as session:
+    tasks.append(asyncio.ensure_future(getDexURL(session)))
+    tasks.append(asyncio.ensure_future(getPrefixes(session)))
+    await asyncio.wait(tasks)
+  return
   
 def main(argv):
-  start = time.time()
   shortOpts = "h"
   longOpts = ["help"]
   try:
@@ -133,15 +173,19 @@ def main(argv):
   for (o, a) in opts:
     if (o in ("-h", "--help")):
       help(2)
-  getDexURL()
+  # It's the same event loop so don't close it until the end
+  # No need to call asyncio.new_event_loop since we have run_until_complete()
   loop = asyncio.get_event_loop()
-  future = asyncio.ensure_future(getPokedex())
-  loop.run_until_complete(future)
+  # Finish setup before completing the pokedex
+  loop.run_until_complete(asyncio.ensure_future(setup()))
+  loop.run_until_complete(asyncio.ensure_future(getPokedex()))
   loop.close()
   saveDict(writeDict=nationalDex,
            writeFile="pokedex.json",
            errorMsg="Error writing pokedex to pokedex.json")
-  print("Took %d seconds" % (time.time() - start))
+  saveDict(writeDict=prefixDict,
+           writeFile="terrariaPrefixes.json",
+           errorMsg="Error writing prefixes to terrariaPrefixes.json")
   return
 
 if __name__ == '__main__':
