@@ -2,11 +2,12 @@ import getopt
 import io
 import json
 import re
+import traceback
 import urllib.error
 import urllib.request
 from bs4 import BeautifulSoup
 from os import path
-from sys import argv, exit
+from sys import argv, exc_info, exit
 
 import time
 
@@ -29,6 +30,13 @@ Usage: %s [options...]
   print(info)
   exit(returnCode)
   
+def getExceptionDetails():
+  _, _, tb = exc_info()
+  traceback.print_tb(tb) # Fixed format
+  tb_info = traceback.extract_tb(tb)
+  filename, line, funct, text = tb_info[-1]
+  return "An error occurred on line {} in statement {}.".format(line, text)
+  
 # Takes in soup, a BeautifulSoup object of a Pokemon's Bulbapedia page, and the
 # Pokemon's name in order to return a formatted string with relevant info about
 # the Pokemon
@@ -44,6 +52,7 @@ def getPokemon(soup, pokemon):
   # pokeTypes = []      # Pokemon types
   pokeTypes = dict()  # Pokemon types
   abilities = dict()  # Pokemon abilities
+  baseStats = dict()  # Pokemon base stats
   prettyPoke = " ".join(p.capitalize() for p in pokemon.split("_"))
   try:
     assert(len(infoTable) == 1)
@@ -139,6 +148,7 @@ def getPokemon(soup, pokemon):
     print(e)
     print("Error getting types for %s" % prettyPoke)
     exit(1)
+  # abilities
   try:
     # Find the link in the table for abilities
     abilityLink = infoTable.find(name="a", title="Ability")
@@ -169,8 +179,49 @@ def getPokemon(soup, pokemon):
     print(e)
     print("Error getting hidden abilities for %s" % prettyPoke)
     exit(1)
-  # abilities
   # base stats
+  try:
+    statTables = soup.find_all(name="table", align="left")
+    for table in statTables:
+      if (table.span.string != "Stat"):
+        continue
+      title = table.find_previous().string
+      if (title == "Base stats"):
+        title = prettyPoke
+      tempDict = dict()
+      # Get the tag with the numbers for a stat
+      baseStat  = table.find_next(name="td")
+      # Get the tag with the stat range at level 50
+      range50   = baseStat.find_next(name="small")
+      # Get the stat range at level 100
+      range100  = range50.find_next(name="small").string
+      # Get the base stat from the cell
+      # baseStat  = baseStat.find_next(name="th").find_next(name="th").string.strip()
+      # Get the stat range at level 50
+      range50   = range50.string
+      tempDict[baseStat.a.string] = """\
+%s;%s;%s""" % (baseStat.find_next(name="th").find_next(name="th").string.strip(),
+               range50, range100)
+      # Do this 5 more times (total of 6) to get all the stats
+      for i in range(0, 5):
+        baseStat  = baseStat.find_next(name="td").find_next(name="td")
+        range50   = baseStat.find_next(name="small")
+        range100  = range50.find_next(name="small").string
+        range50   = range50.string
+        tempDict[baseStat.a.string] = """\
+%s;%s;%s""" % (baseStat.find_next(name="th").find_next(name="th").string.strip(),
+               range50, range100)
+      baseStat  = baseStat.find_next(name="td").find_next(name="td")
+      tempDict["Total"] = baseStat.find_next("th").find_next("th").string.strip()
+      baseStats[title] = tempDict
+    pokeDict["baseStats"] = baseStats
+  except Exception as e:
+    print(e)
+    errorMsg = getExceptionDetails()
+    print(errorMsg)
+    print("Error getting base stats for %s" % prettyPoke)
+    exit(1)
+  # use find_previous to find what pokemon the stat is for
   return pokeDict
   
 # Send a GET request to targetURL, read the data from the response, and return
