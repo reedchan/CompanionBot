@@ -2,8 +2,8 @@ import aiohttp
 import asyncio
 import async_timeout
 import getopt
-import io
 import json
+import logging
 import re
 from bs4 import BeautifulSoup
 from os import path
@@ -38,8 +38,8 @@ def saveDict(writeDict, writeFile, errorMsg):
     f.close()
   except Exception as e:
     if (errorMsg != ""):
-      print(errorMsg)
-    print(e)
+      logging.error(errorMsg)
+    logging.error(e)
     exit(1)
   return
   
@@ -52,7 +52,7 @@ async def getDexURL(session):
       data = await response.read()
       soup = BeautifulSoup(data, "html.parser")
     except Exception as e:
-      print(e)
+      logging.error(e)
   regions = {"Kanto", "Johto", "Hoenn", "Sinnoh", "Unova", "Kalos", "Alola"}
   tables = soup.find_all("table")
   for tableBody in tables:
@@ -97,7 +97,7 @@ async def getPrefixes(session):
       data = await response.read()
       soup = BeautifulSoup(data, "html.parser")
     except Exception as e:
-      print(e)
+      logging.error(e)
   # Get the tables
   tables = soup.find_all("table")
   for tableBody in tables:
@@ -130,7 +130,7 @@ async def getPokeInfo(key, session):
       data = await response.read()
       soup = BeautifulSoup(data, "html.parser")
     except Exception as e:
-      print(e)
+      logging.error(e)
   tempDict.update(getPokemon(soup, key))
   nationalDex[key] = tempDict
   return
@@ -163,12 +163,15 @@ async def setup():
   return
   
 def main(argv):
+  logFormat   = "%(asctime)s %(levelname)s %(message)s"
+  dateFormat  = "%Y-%m-%d %H:%M:%S UTC-%z"
+  logging.basicConfig(format=logFormat, datefmt=dateFormat, level=10)
   shortOpts = "h"
   longOpts = ["help"]
   try:
     opts, args = getopt.getopt(argv[1:], shortOpts, longOpts)
-  except Exception as e:
-    print(e)
+  except getopt.GetoptError as e:
+    logging.error(e)
     help(2)
   for (o, a) in opts:
     if (o in ("-h", "--help")):

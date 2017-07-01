@@ -1,6 +1,7 @@
 import discord
 import getopt
 import json
+import logging
 import random
 import re
 
@@ -31,10 +32,10 @@ Usage: %s [options...]
 
 @bot.event
 async def on_ready():
-    print('Logged in as')
-    print(bot.user.name)
-    print(bot.user.id)
-    print('------')
+    logging.debug('Logged in as')
+    logging.debug(bot.user.name)
+    logging.debug(bot.user.id)
+    logging.debug('------')
     await bot.change_presence(game=botGameStatus, afk=False)
     
 # The order of the @bot.command functions determines their order in the help msg
@@ -130,19 +131,22 @@ def loadDict(readFile):
     d = json.loads(f.read())
     f.close()
   except Exception as e:
-    print(e)
+    logging.error(e)
     exit(1)
   return d
 
 def main(argv):
   global bot, nationalDex, prefixDict
+  logFormat   = "%(asctime)s %(levelname)s %(message)s"
+  dateFormat  = "%Y-%m-%d %H:%M:%S UTC-%z"
+  logging.basicConfig(format=logFormat, datefmt=dateFormat, level=10)
   shortOpts = "hmt:"
   longOpts = ["help", "music", "token="]
   token = ""
   try:
     opts, args = getopt.getopt(argv[1:], shortOpts, longOpts)
   except Exception as e:
-    print(e)
+    logging.error(e)
     help(2)
   for (o, a) in opts:
     if (o in ("-h", "--help")):
@@ -160,24 +164,24 @@ def main(argv):
             discord.opus.load_opus('opus')
         bot.add_cog(Music(bot))
       except Exception as e:
-        print(e)
+        logging.error(e)
         exit(1)
     elif (o in ("-t", "--token")):
       token = a
   try:
     assert(token != "")
   except AssertionError:
-    print("Please specify the bot's token as an argument.")
+    logging.error("Please specify the bot's token as an argument.")
     exit(1)
   except Exception as e:
-    print(e)
+    logging.error(e)
     exit(1)
   nationalDex = loadDict("pokedex.json")
   prefixDict  = loadDict("terrariaPrefixes.json")
   try:
     bot.run(token)
   except Exception as e:
-    print(e)
+    logging.error(e)
     exit(1)
   return
 

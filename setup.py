@@ -1,6 +1,7 @@
 import getopt
 import io
 import json
+import logging
 import re
 import traceback
 import urllib.error
@@ -57,7 +58,8 @@ def getPokemon(soup, pokemon):
   try:
     assert(len(infoTable) == 1)
   except:
-    print("Page layout changed - Need to update the bot")
+    logging.error("Page layout changed - Need to update the bot")
+    exit(1)
   infoTable = infoTable[0]
   # Be careful with the following pokemon
   # sawsbuck  (image)
@@ -75,8 +77,8 @@ def getPokemon(soup, pokemon):
     embedImg = embedImg.get("src")
     pokeDict["img"] = embedImg
   except Exception as e:
-    print(e)
-    print("Error getting embedImg for %s" % prettyPoke)
+    logging.error(e)
+    logging.error("Error getting embedImg for %s" % prettyPoke)
     exit(1)
   try:
     pokeText = infoTable.find(name="a", title=re.compile("Pok.mon category"))
@@ -93,8 +95,8 @@ def getPokemon(soup, pokemon):
     # Cannot write 'é' to a file"
     pokeDict["category"] = pokeText
   except Exception as e:
-    print(e)
-    print("Error getting pokeText for %s" % prettyPoke)
+    logging.error(e)
+    logging.error("Error getting pokeText for %s" % prettyPoke)
     exit(1)
   try:
     dexRE = re.compile("List of Pokémon by National Pokédex number")
@@ -102,8 +104,8 @@ def getPokemon(soup, pokemon):
     natDexNo = natDexNo.string
     pokeDict["natDexNo"] = natDexNo
   except Exception as e:
-    print(e)
-    print("Error getting National Pokedex number for %s" % prettyPoke)
+    logging.error(e)
+    logging.error("Error getting National Pokedex number for %s" % prettyPoke)
     exit(1)
   try:
     typeRE = re.compile("(?<!Unknown )\(type\)")
@@ -145,8 +147,8 @@ def getPokemon(soup, pokemon):
       # pokeTypes += [tempTypes]
     pokeDict["types"] = pokeTypes
   except Exception as e:
-    print(e)
-    print("Error getting types for %s" % prettyPoke)
+    logging.error(e)
+    logging.error("Error getting types for %s" % prettyPoke)
     exit(1)
   # abilities
   try:
@@ -176,8 +178,8 @@ def getPokemon(soup, pokemon):
           abilities[key] = ability.a.string
     pokeDict["abilities"] = abilities
   except Exception as e:
-    print(e)
-    print("Error getting hidden abilities for %s" % prettyPoke)
+    logging.error(e)
+    logging.error("Error getting hidden abilities for %s" % prettyPoke)
     exit(1)
   # base stats
   try:
@@ -216,10 +218,10 @@ def getPokemon(soup, pokemon):
       baseStats[title] = tempDict
     pokeDict["baseStats"] = baseStats
   except Exception as e:
-    print(e)
+    logging.error(e)
     errorMsg = getExceptionDetails()
-    print(errorMsg)
-    print("Error getting base stats for %s" % prettyPoke)
+    logging.error(errorMsg)
+    logging.error("Error getting base stats for %s" % prettyPoke)
     exit(1)
   # use find_previous to find what pokemon the stat is for
   return pokeDict
@@ -235,8 +237,8 @@ def getSoup(targetURL, errorMsg):
     soup = BeautifulSoup(data, "html.parser")
   except Exception as e:
     if (errorMsg != ""):
-      print(errorMsg)
-    print(e)
+      logging.error(errorMsg)
+    logging.error(e)
     exit(1)
   return soup
 
@@ -251,19 +253,22 @@ def saveDict(writeDict, writeFile, errorMsg):
     f.close()
   except Exception as e:
     if (errorMsg != ""):
-      print(errorMsg)
-    print(e)
+      logging.error(errorMsg)
+    logging.error(e)
     exit(1)
   return
 
 def main(argv):
   start = time.time()
+  logFormat   = "%(asctime)s %(levelname)s %(message)s"
+  dateFormat  = "%Y-%m-%d %H:%M:%S UTC-%z"
+  logging.basicConfig(format=logFormat, datefmt=dateFormat, level=10)
   shortOpts = "ahpt"
   longOpts = ["all", "help", "pokemon", "terraria"]
   try:
     opts, args = getopt.getopt(argv[1:], shortOpts, longOpts)
-  except Exception as e:
-    print(e)
+  except getopt.GetoptError as e:
+    logging.error(e)
     help(2)
   # Whether or not to get the national Pokedex from Bulbapedia
   pokedex = False
@@ -280,10 +285,10 @@ def main(argv):
     elif (o in ("-t", "--terraria")):
       prefixes = True
   if ((not pokedex) and (not prefixes)):
-    print("Please specify what you would like to setup.")
+    logging.error("Please specify what you would like to setup.")
     help(2)
   if (pokedex):
-    print("Preparing Pokédex (this may take a while)...")
+    logging.debug("Preparing Pokédex (this may take a while)...")
     baseURL = "http://bulbapedia.bulbagarden.net"
     regions = {"Kanto", "Johto", "Hoenn", "Sinnoh", "Unova", "Kalos", "Alola"}
     soup = getSoup(targetURL="%s%s"%(baseURL, "/wiki/List_of_Pok%C3%A9mon_by_National_Pok%C3%A9dex_number"),
@@ -335,7 +340,7 @@ def main(argv):
       tempDict.update(getPokemon(soup, key))
       nationalDex[key] = tempDict
   if (prefixes):
-    print("Preparing Terraria prefixes...")
+    logging.debug("Preparing Terraria prefixes...")
     soup = getSoup(targetURL="http://terraria.gamepedia.com/Prefix_IDs",
                    errorMsg="")
     # Get the tables
@@ -361,18 +366,18 @@ def main(argv):
       else:
         continue
   if (pokedex):
-    print("Writing pokedex to pokedex.json...")
+    logging.debug("Writing pokedex to pokedex.json...")
     saveDict(writeDict=nationalDex,
              writeFile="pokedex.json",
              errorMsg="Error writing pokedex to pokedex.json")
-    print("Done!")
+    logging.debug("Done!")
   if (prefixes):
-    print("Writing prefixes to terrariaPrefixes.json...")
+    logging.debug("Writing prefixes to terrariaPrefixes.json...")
     saveDict(writeDict=prefixDict,
              writeFile="terrariaPrefixes.json",
              errorMsg="Error writing prefixes to terrariaPrefixes.json")
-    print("Done!")
-  print("Took %d seconds" % (time.time() - start))
+    logging.debug("Done!")
+  logging.debug("Took %d seconds" % (time.time() - start))
   return
 
 if __name__ == '__main__':
