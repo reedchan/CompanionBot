@@ -3,7 +3,6 @@
 import getopt
 import json
 import logging
-import pprint
 import random
 import re
 import sys
@@ -25,93 +24,22 @@ prefixDict  = dict()
 
 def help(returnCode):
   info = """\
-Usage: %s [options...]
+Usage: {} [options...]
   -h, --help        Print this help message
   -t, --token       Specify the bot's token to run it
   -v, --verbose     Change the logging level to DEBUG
-  -m, --music       Add music playback functionality to the bot
-""" % path.split(__file__)[1]
+      --music       Add music playback functionality to the bot
+      --pokemon     Add Bulbapedia Pokemon lookup functionality to the bot
+""".format(path.split(__file__)[1])
   print(info)
   sys.exit(returnCode)
   
-def getPokeEmbed(species):
-  pokeDict    = nationalDex[species]
-  pokeName    = list(map(lambda x:x.capitalize(), species.split("_")))
-  pokeName    = " ".join(pokeName)
-  prettyName  = pokeName.replace("(m)", "\u2642").replace("(f)", "\u2640")
-  pokeEmbed = discord.Embed(title=prettyName,
-                            description="{}: {}".format(pokeDict["natDexNo"],
-                                                        pokeDict["category"]),
-                            url=pokeDict["url"])
-  types     = pokeDict["types"]
-  abilities = pokeDict["abilities"]
-  baseStats = pokeDict["baseStats"]
-  if (len(types) == 1):
-    pokeEmbed.add_field(name="Types",
-                        value=list(types.values())[0].replace(";", ", "),
-                        inline=False)
-  else:
-    typeStr = []
-    for type in sorted(types.items()):
-      typeStr.append("{}: {}".format(type[0], type[1].replace(";", ", ")))
-    pokeEmbed.add_field(name="Types", value="\n".join(typeStr), inline=False)
-  if (len(abilities) == 1):
-    pokeEmbed.add_field(name="Abilities",
-                        value=list(abilities.values())[0].replace(";", ", "),
-                        inline=False)
-  else:
-    abilityStr = []
-    for ability in sorted(abilities.items()):
-      abilityStr.append("{}: {}".format(ability[0].replace("(m)", "\u2642").replace("(f)", "\u2640"),
-                                        ability[1].replace(";", ", ")))
-    pokeEmbed.add_field(name="Abilities", value="\n".join(abilityStr), inline=False)
-  statStr = []
-  statStr.append("```{:^15}{:^24}".format("Stat", "Range"))
-  statStr.append("{:15}{:^12}{:^12}".format("", "At Lv. 50", "At Lv. 100"))
-  getValues   = lambda key,stat: baseStats[key][stat].split(";")
-  appendStat  = lambda key, stat: statStr.append("{0:<9}{1[0]:<6}{1[1]:^12}{1[2]:^12}".format("{}:".format(stat), getValues(key, stat)))
-  keys = sorted(baseStats.keys())
-  # Experienced errors with Deoxys probably because of the many forms
-  # Limit the base stats to reduce the character count
-  # Probably hitting the character limit
-  # TODO: remove limit if the character limit is upped or removed
-  if (len(keys) > 3):
-    count = 0
-    for key in keys:
-      if (count == 3):
-        break
-      statStr.append("{}".format(key.replace("(m)", "\u2642").replace("(f)", "\u2640")))
-      appendStat(key, "HP")
-      appendStat(key, "Attack")
-      appendStat(key, "Defense")
-      appendStat(key, "Sp.Atk")
-      appendStat(key, "Sp.Def")
-      appendStat(key, "Speed")
-      statStr.append("{0:<9}{1[0]}".format("{}:".format("Total"), getValues(key, "Total")))
-      count += 1
-    statStr.append("Check Bulbapedia for more stats.")
-  else:
-    for key in keys:
-      statStr.append("{}".format(key.replace("(m)", "\u2642").replace("(f)", "\u2640")))
-      appendStat(key, "HP")
-      appendStat(key, "Attack")
-      appendStat(key, "Defense")
-      appendStat(key, "Sp.Atk")
-      appendStat(key, "Sp.Def")
-      appendStat(key, "Speed")
-      statStr.append("{0:<9}{1[0]}".format("{}:".format("Total"), getValues(key, "Total")))
-  statStr.append("```")
-  pokeEmbed.add_field(name="Base Stats", value="\n".join(statStr), inline=False)
-  pokeEmbed.set_thumbnail(url="https:{}".format(pokeDict["img"]))
-  pokeEmbed.set_footer(text="Source: https://bulbapedia.bulbagarden.net/")
-  return pokeEmbed
-
 @bot.event
 async def on_ready():
-    logging.debug('Logged in as')
-    logging.debug(bot.user.name)
-    logging.debug(bot.user.id)
-    logging.debug('------')
+    logging.info('Logged in as')
+    logging.info(bot.user.name)
+    logging.info(bot.user.id)
+    logging.info('------')
     await bot.change_presence(game=botGameStatus, afk=False)
     
 # The order of the @bot.command functions determines their order in the help msg
@@ -143,38 +71,6 @@ async def _bot():
 async def joined(member : discord.Member):
     """Says when a member joined."""
     await bot.say('{0.name} joined in {0.joined_at}'.format(member))
-    
-@bot.command()
-async def pokemon(*search : str):
-  """Get info about a Pokémon."""
-  species = "_".join(search).lower()
-  species = species.replace("mega_", "")
-  if (species in nationalDex):
-    # await bot.say("```%s```" % nationalDex[species])
-    # await bot.say("%s" % nationalDex[species])
-    await bot.say(embed=getPokeEmbed(species))
-  # For people who are too lazy to type the apostrophe
-  elif (species == "farfetchd"):
-    # await bot.say("%s" % nationalDex["farfetch'd"])
-    await bot.say(embed=getPokeEmbed("farfetch'd"))
-  # Simplify searching for Flabébé
-  elif (species == "flabebe"):
-    # await bot.say("%s" % nationalDex["flabébé"])
-    await bot.say(embed=getPokeEmbed("flabébé"))
-    # await bot.say("%s" % nationalDex["flab\u00e9b\u00e9"])
-  # For people who are too lazy to type the colon
-  elif (species == "type_null"):
-    # await bot.say("%s" % nationalDex["type:_null"])
-    await bot.say(embed=getPokeEmbed("type:_null"))
-  # Specify Nidoran (M) or (F)
-  elif (species == "nidoran"):
-    await bot.say("```Please specify 'nidoran (f)' or 'nidoran (m)'```")
-  elif (species in ("nidoran_f", "nidoran_m")):
-    await bot.say(embed=getPokeEmbed(species.replace("f", "(f)").replace("m", "(m)")))
-  elif (species == "derpkip"):
-    await bot.say(embed=getPokeEmbed("mudkip"))
-  else:
-    await bot.say("```Please specify the Pokémon you would like to look up.```")
     
 # content defaults to the string "repeating..."
 @bot.command()
@@ -227,13 +123,13 @@ def main(argv):
   dateFormat  = "%Y-%m-%d %H:%M:%S UTC-%z"
   logging.basicConfig(format=logFormat, datefmt=dateFormat, level=logging.INFO,
                       style="{")
-  shortOpts = "hmt:v"
+  shortOpts = "ht:v"
   longOpts = ["help", "token=", "verbose",
-              "music"]
+              "music", "pokemon"]
   token = ""
   try:
     opts, args = getopt.getopt(argv, shortOpts, longOpts)
-  except Exception as e:
+  except getopt.GetoptError as e:
     logging.error(e)
     help(2)
   for (o, a) in opts:
@@ -243,7 +139,7 @@ def main(argv):
       token = a
     elif (o in ("-v", "--verbose")):
       logging.getLogger().setLevel(logging.DEBUG)
-    elif (o in ("-m", "--music")):
+    elif (o == "--music"):
       try:
         # Import the music features
         from playlist import Music, VoiceEntry, VoiceState
@@ -258,16 +154,13 @@ def main(argv):
       except Exception as e:
         logging.error(e)
         sys.exit(1)
-
-  try:
-    assert(token != "")
-  except AssertionError:
-    logging.error("Please specify the bot's token as an argument.")
-    sys.exit(1)
-  except Exception as e:
-    logging.error(e)
-    sys.exit(1)
-  nationalDex = loadDict("pokedex.json")
+    elif (o == "--pokemon"):
+      try:
+        from pokemon import Pokemon
+        bot.add_cog(Pokemon(bot))
+      except Exception as e:
+        logging.error(e)
+        sys.exit(1)
   prefixDict  = loadDict("terrariaPrefixes.json")
   try:
     bot.run(token)
