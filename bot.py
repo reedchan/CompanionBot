@@ -30,6 +30,7 @@ Usage: {} [options...]
   -v, --verbose     Change the logging level to DEBUG
       --music       Add music playback functionality to the bot
       --pokemon     Add Bulbapedia Pokemon lookup functionality to the bot
+      --terraria    Add Terraria prefix ID lookup functionality to the bot
 """.format(path.split(__file__)[1])
   print(info)
   sys.exit(returnCode)
@@ -90,19 +91,6 @@ async def roll(dice : str):
 
     result = ', '.join(str(random.randint(1, limit)) for r in range(rolls))
     await bot.say(result)
-
-@bot.command()
-async def terraria(search : str):
-  """Get the ID of a Terraria prefix."""
-  prefix = search.lower()
-  if (prefix in prefixDict):
-    id = prefixDict[prefix]
-    if (prefix in ("deadly", "hasty", "quick")):
-      await bot.say("```%s: %s, %s```" % (prefix, id[0], id[1]))
-    else:
-      await bot.say("```%s: %s```" % (prefix, id))
-  else:
-    await bot.say("```Please specify the prefix you would like to look up.```")
     
 # Safely load a dictionary that has been saved to readFile, a JSON file, and
 # return the dictionary
@@ -125,7 +113,7 @@ def main(argv):
                       style="{")
   shortOpts = "ht:v"
   longOpts = ["help", "token=", "verbose",
-              "music", "pokemon"]
+              "music", "pokemon", "terraria"]
   token = ""
   try:
     opts, args = getopt.getopt(argv, shortOpts, longOpts)
@@ -161,7 +149,13 @@ def main(argv):
       except Exception as e:
         logging.error(e)
         sys.exit(1)
-  prefixDict  = loadDict("terrariaPrefixes.json")
+    elif (o == "--terraria"):
+      try:
+        from terraria import Terraria
+        bot.add_cog(Terraria(bot))
+      except Exception as e:
+        logging.error(e)
+        sys.exit(1)
   try:
     bot.run(token)
   except Exception as e:
