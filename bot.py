@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Python standard modules
-import getopt
+import argparse
 import json
 import logging
 import random
@@ -18,23 +18,11 @@ playlist.py. Please report any issues at https://github.com/reedchan/companionbo
 bot = commands.Bot(command_prefix=commands.when_mentioned_or("!"),
                    description=description)
 botGameStatus       = discord.Game()
+# What the bot is playing/streaming
 botGameStatus.name  = "CompanionBot at github.com/reedchan/CompanionBot"
-nationalDex = dict()
-prefixDict  = dict()
+# 0 for playing, 1 for streaming
+botGameStatus.type  = 0
 
-def help(returnCode):
-  info = """\
-Usage: {} [options...]
-  -h, --help        Print this help message
-  -t, --token       Specify the bot's token to run it
-  -v, --verbose     Change the logging level to DEBUG
-      --music       Add music playback functionality to the bot
-      --pokemon     Add Bulbapedia Pokemon lookup functionality to the bot
-      --terraria    Add Terraria prefix ID lookup functionality to the bot
-""".format(path.split(__file__)[1])
-  print(info)
-  sys.exit(returnCode)
-  
 @bot.event
 async def on_ready():
     logging.info('Logged in as')
@@ -105,63 +93,67 @@ def loadDict(readFile):
     sys.exit(1)
   return d
 
-def main(argv):
-  global bot, nationalDex, prefixDict
+def main():
+  global bot
   logFormat   = "{asctime}  {levelname:<10} {message}"
   dateFormat  = "%Y-%m-%d %H:%M:%S UTC-%z"
   logging.basicConfig(format=logFormat, datefmt=dateFormat, level=logging.INFO,
                       style="{")
-  shortOpts = "ht:v"
-  longOpts = ["help", "token=", "verbose",
-              "music", "pokemon", "terraria"]
-  token = ""
+  parser = argparse.ArgumentParser()
+  parser.add_argument("--token",
+                      help="specify the bot's token to run it",
+                      required=True,
+                      type=str)
+  parser.add_argument("-v", "--verbose",
+                      help="change the logging level to DEBUG",
+                      action="store_true")
+  parser.add_argument("--music",
+                      help="add music playback functionality to the bot",
+                      action="store_true")
+  parser.add_argument("--pokemon",
+                      help="add Bulbapedia Pokemon lookup functionality to the bot",
+                      action="store_true")
+  parser.add_argument("--terraria",
+                      help="add Terraria prefix ID lookup functionality to the bot",
+                      action="store_true")
+  args = parser.parse_args()
+  if (args.verbose):
+    logging.getLogger().setLevel(logging.DEBUG)
+  if (args.music):
+    try:
+      # Import the music features
+      from playlist import Music, VoiceEntry, VoiceState
+      if not discord.opus.is_loaded():
+          # the 'opus' library here is opus.dll on windows
+          # or libopus.so on linux in the current directory
+          # you should replace this with the location the
+          # opus library is located in and with the proper filename.
+          # note that on windows this DLL is automatically provided for you
+          discord.opus.load_opus('opus')
+      bot.add_cog(Music(bot))
+    except Exception as e:
+      logging.error(e)
+      sys.exit(1)
+  if (args.pokemon):
+    try:
+      from pokemon import Pokemon
+      bot.add_cog(Pokemon(bot))
+    except Exception as e:
+      logging.error(e)
+      sys.exit(1)
+  if (args.terraria):
+    try:
+      from terraria import Terraria
+      bot.add_cog(Terraria(bot))
+    except Exception as e:
+      logging.error(e)
+      sys.exit(1)
   try:
-    opts, args = getopt.getopt(argv, shortOpts, longOpts)
-  except getopt.GetoptError as e:
-    logging.error(e)
-    help(2)
-  for (o, a) in opts:
-    if (o in ("-h", "--help")):
-      help(2)
-    elif (o in ("-t", "--token")):
-      token = a
-    elif (o in ("-v", "--verbose")):
-      logging.getLogger().setLevel(logging.DEBUG)
-    elif (o == "--music"):
-      try:
-        # Import the music features
-        from playlist import Music, VoiceEntry, VoiceState
-        if not discord.opus.is_loaded():
-            # the 'opus' library here is opus.dll on windows
-            # or libopus.so on linux in the current directory
-            # you should replace this with the location the
-            # opus library is located in and with the proper filename.
-            # note that on windows this DLL is automatically provided for you
-            discord.opus.load_opus('opus')
-        bot.add_cog(Music(bot))
-      except Exception as e:
-        logging.error(e)
-        sys.exit(1)
-    elif (o == "--pokemon"):
-      try:
-        from pokemon import Pokemon
-        bot.add_cog(Pokemon(bot))
-      except Exception as e:
-        logging.error(e)
-        sys.exit(1)
-    elif (o == "--terraria"):
-      try:
-        from terraria import Terraria
-        bot.add_cog(Terraria(bot))
-      except Exception as e:
-        logging.error(e)
-        sys.exit(1)
-  try:
-    bot.run(token)
+    bot.run(args.token)
   except Exception as e:
     logging.error(e)
     sys.exit(1)
   return
 
 if __name__ == '__main__':
-  main(sys.argv[1:])
+  main()
