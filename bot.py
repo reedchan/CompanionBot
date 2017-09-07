@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # Python standard modules
 import argparse
+import configparser
 import json
 import logging
+import os
 import random
 import re
 import sys
@@ -79,19 +81,6 @@ async def roll(dice : str):
 
     result = ', '.join(str(random.randint(1, limit)) for r in range(rolls))
     await bot.say(result)
-    
-# Safely load a dictionary that has been saved to readFile, a JSON file, and
-# return the dictionary
-def loadDict(readFile):
-  d = dict()
-  try:
-    f = open(readFile, 'r')
-    d = json.loads(f.read())
-    f.close()
-  except Exception as e:
-    logging.error(e)
-    sys.exit(1)
-  return d
 
 def main():
   global bot
@@ -100,9 +89,11 @@ def main():
   logging.basicConfig(format=logFormat, datefmt=dateFormat, level=logging.INFO,
                       style="{")
   parser = argparse.ArgumentParser()
+  parser.add_argument("-c", "--config",
+                      help="use settings in configFile",
+                      action="store_true")  
   parser.add_argument("--token",
                       help="specify the bot's token to run it",
-                      required=True,
                       type=str)
   parser.add_argument("-v", "--verbose",
                       help="change the logging level to DEBUG",
@@ -117,9 +108,40 @@ def main():
                       help="add Terraria prefix ID lookup functionality to the bot",
                       action="store_true")
   args = parser.parse_args()
-  if (args.verbose):
+  config = configparser.ConfigParser()
+  # Directory that this file is in
+  botDir      = path.split(__file__)[0]
+  # Config file
+  configFile  = path.join(botDir, "botConfig.ini")
+  if (not path.exists(configFile)):
+    config["DEFAULT"] = {}
+    config["DEFAULT"]["token"]    = str(args.token)
+    config["DEFAULT"]["verbose"]  = str(args.verbose)
+    config["COGS"] = {}
+    config["COGS"]["music"]     = str(args.music)
+    config["COGS"]["pokemon"]   = str(args.pokemon)
+    config["COGS"]["terraria"]  = str(args.terraria)
+    try:
+      with open(configFile, 'w') as f:
+        config.write(f)
+    except Exception as e:
+      logging.error(e)
+      sys.exit(1)
+  if (args.config):
+    try:
+      assert(path.exists(configFile))
+    except AssertionError:
+      logging.error("{} does not exist.".format(configFile))
+      sys.exit(1)
+    try:
+      config.read(configFile)
+    except Exception as e:
+      logging.error(e)
+      sys.exit(1)
+
+  if (args.verbose or (args.config and config["DEFAULT"].getboolean("verbose"))):
     logging.getLogger().setLevel(logging.DEBUG)
-  if (args.music):
+  if (args.music or (args.config and config["COGS"].getboolean("music"))):
     try:
       # Import the music features
       from playlist import Music, VoiceEntry, VoiceState
@@ -134,22 +156,34 @@ def main():
     except Exception as e:
       logging.error(e)
       sys.exit(1)
-  if (args.pokemon):
+  if (args.pokemon or (args.config and config["COGS"].getboolean("pokemon"))):
     try:
       from pokemon import Pokemon
       bot.add_cog(Pokemon(bot))
     except Exception as e:
       logging.error(e)
       sys.exit(1)
-  if (args.terraria):
+  if (args.terraria or (args.config and config["COGS"].getboolean("terraria"))):
     try:
       from terraria import Terraria
       bot.add_cog(Terraria(bot))
     except Exception as e:
       logging.error(e)
       sys.exit(1)
+  if (args.config):
+    token = config["DEFAULT"]["token"]
+  else:
+    token = args.token
   try:
-    bot.run(args.token)
+    assert(token and (token != "None"))
+    bot.run(token)
+  except AssertionError:
+    if (args.config):
+      logging.error("Invalid token '{}' in {}".format(token, configFile))
+    else:
+      logging.error("""Invalid token '{}' specified. Please use {} or specify \
+a token.""".format(token, configFile))
+    sys.exit(1)
   except Exception as e:
     logging.error(e)
     sys.exit(1)
