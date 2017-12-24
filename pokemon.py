@@ -9,7 +9,9 @@ import discord
 from bs4 import BeautifulSoup
 from discord.ext import commands
 
-user_agent = 'Mozilla/5.0 (Windows; U; Windows NT 10.0; rv:10.0) Gecko/20100101 Firefox/52.0'
+user_agent = """\
+Mozilla/5.0 (Windows; U; Windows NT 10.0; rv:10.0) Gecko/20100101 Firefox/52.0\
+"""
 sendHeader={'User-Agent':user_agent,}
 
 class Pokemon:
@@ -309,12 +311,12 @@ class Pokemon:
     return
     
   @commands.command()
-  async def pokemon(self, *search : str):
+  async def pokemon(self, ctx, *search : str):
     """Look up a Pokemon on Bulbapedia"""
     errorMsg = ["Invalid Pokemon '{}' specified.".format(" ".join(search)),
                 "Please specify a valid Pokemon to look up."]
     if (len(search) < 1):
-      await self.bot.say("```{0[1]}```".format(errorMsg))
+      await ctx.send("```{0[1]}```".format(errorMsg))
       return
     # Share a client session so it will not open a new session for each request
     async with aiohttp.ClientSession() as session:
@@ -336,13 +338,13 @@ class Pokemon:
       elif (species == "type_null"):
         pokemon = "type:_null"
       elif (species == "nidoran"):
-        await self.bot.say("""```Please specify either Nidoran (F) or Nidoran \
+        await ctx.send("""```Please specify either Nidoran (F) or Nidoran \
 (M).```""")
         return
       elif (species in ("nidoran_f", "nidoran_m")):
         pokemon = "nidoran_(f)" if species.endswith("f") else "nidoran_(m)"
       else:
-        await self.bot.say("```{0[0]} {0[1]}```".format(errorMsg))
+        await ctx.send("```{0[0]} {0[1]}```".format(errorMsg))
         return
       # Get the Bulbapedia URL
       url = self.pokedex[pokemon]
@@ -367,5 +369,5 @@ class Pokemon:
 BeautifulSoup object for the Pokemon '{}'.""".format(pokemon))
       return
     pokeEmbed = self.getPokeEmbed(pokeDict, pokemon)
-    await self.bot.say(embed=pokeEmbed)
+    await ctx.send(embed=pokeEmbed)
     return

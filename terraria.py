@@ -46,10 +46,10 @@ class Terraria:
     return
 
   @commands.command()
-  async def prefix(self, search : str):
+  async def prefix(self, ctx, search : str):
     """Look up an item prefix on the official Terraria wiki."""
     if (search == ""):
-      await self.bot.say("Please specify a Terraria prefix to look up.")
+      await ctx.send("Please specify a Terraria prefix to look up.")
       return
     # Share a client session so it will not open a new session for each request
     async with aiohttp.ClientSession() as session:
@@ -61,10 +61,10 @@ class Terraria:
       id = self.prefixes[prefix]
       # Prefix with multiple IDs
       if (type(id) == list):
-        await self.bot.say("```{0}: {1}```".format(prefix, ", ".join(id)))
+        await ctx.send("```{0}: {1}```".format(prefix, ", ".join(id)))
       else:
-        await self.bot.say("```{0}: {1}```".format(prefix, id))
+        await ctx.send("```{0}: {1}```".format(prefix, id))
     else:
-      await self.bot.say("""```Invalid prefix '{}' specified. Please specify \
+      await ctx.send("""```Invalid prefix '{}' specified. Please specify \
 a valid prefix to look up```.""".format(search))
     return
