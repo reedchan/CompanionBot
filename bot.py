@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Python standard modules
 import argparse
 import configparser
 import json
@@ -9,7 +8,7 @@ import random
 import re
 import sys
 from os import path
-# Non-standard modules
+
 import discord
 from discord.ext import commands
 

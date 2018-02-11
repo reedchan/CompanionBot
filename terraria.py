@@ -15,7 +15,7 @@ class Terraria:
     self.bot = bot
     self.prefixes = None
 
-  async def getTPrefixes(self, session):
+  async def _getTPrefixes(self, session):
     """Create a dictionary containing the ID's for each Terraria prefix."""
     url = "http://terraria.gamepedia.com/Prefix_IDs"
     async with session.get(url) as response:
@@ -55,7 +55,7 @@ class Terraria:
     async with aiohttp.ClientSession() as session:
       # Setup the dictionary with all of the prefixes first
       if (self.prefixes == None):
-        await self.getTPrefixes(session)
+        await self._getTPrefixes(session)
     prefix = search.lower()
     if (prefix in self.prefixes):
       id = self.prefixes[prefix]
