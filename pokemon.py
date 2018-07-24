@@ -1,5 +1,3 @@
-# TODO: FIX INDENTATION TO REMOVE THIS ERROR
-#       PEP8-COMPLIANT MEANS 4 SPACES/TAB
 import logging
 import re
 
@@ -12,7 +10,14 @@ from asyncTest import saveDict
 user_agent = """\
 Mozilla/5.0 (Windows; U; Windows NT 10.0; rv:10.0) Gecko/20100101 Firefox/52.0\
 """
-sendHeader = {'User-Agent': user_agent, }
+sendHeader = {
+    'User-Agent': user_agent
+}
+
+BASE_URL = "https://bulbapedia.bulbagarden.net"
+API_URL = f"{BASE_URL}/w/api.php?"
+HTTP_OK = 200  # HTTP status code 200
+NUM_POKEMON = 807  # Number of Pokemon in the National Pokedex
 
 
 class Pokemon:
@@ -281,7 +286,6 @@ Error getting National Pokedex number for {}\
         info -- the dictionary containing the Pokemon's information
         poke -- the name of the Pokemon
         """
-        pokeName = self._titlecase(poke.replace("_", " "))
 
         def unicodeFix(str):
             """Replace certain substrings with Unicode characters.
@@ -295,11 +299,13 @@ Error getting National Pokedex number for {}\
             temp = re.sub("[ _]\([mM]\)", "\u2642", temp)
             return temp
 
-        pokeName = unicodeFix(pokeName)
+        embedUrl = self.pokedex[poke.lower().replace("_", " ")]
+        embedUrl = f"{BASE_URL}/wiki/{embedUrl}"
+        pokeName = poke.replace("_", " ")
         embed = discord.Embed(title=pokeName,
                               description="{}: {}".format(info["natDexNo"],
                                                           info["category"]),
-                              url=self.pokedex[poke])
+                              url=embedUrl)
         types = info["types"]
         abilities = info["abilities"]
         baseStats = info["baseStats"]
@@ -393,61 +399,77 @@ Error getting National Pokedex number for {}\
         else:
             return " ".join(map(lambda s: s.capitalize(), string.split(" ")))
 
-    async def _getPokeURLs(self, session):
+    async def _getPokedex(self, session):
         """Create a dictionary containing the Bulbapedia URLs for every Pokemon.
 
         Keyword arguments:
         session -- the aiohttp session to use
         """
-        baseURL = "http://bulbapedia.bulbagarden.net"
-        page = "/wiki/List_of_Pok%C3%A9mon_by_National_Pok%C3%A9dex_number"
-        pokeUrl = "{}{}".format(baseURL, page)
-        pokedex = dict()
-        async with session.get(pokeUrl) as response:
+        page = "List_of_Pokémon_by_National_Pokédex_number"
+        params = "action=parse&format=json&page="
+        url = f"{API_URL}{params}{page}"
+        async with session.get(url) as response:
             try:
-                assert(response.status == 200)
-                data = await response.read()
-                soup = BeautifulSoup(data, "html.parser")
+                assert(response.status == HTTP_OK)
+                data = await response.json()
+            except AssertionError:
+                s = f"GET request for {url} returned with HTTP status code" + \
+                    f"{response.status}"
+                logging.warning(s)
+                return False
             except Exception as e:
                 logging.error(e)
-        # Add more regions as needed
-        regions = {"Kanto",
-                   "Johto",
-                   "Hoenn",
-                   "Sinnoh",
-                   "Unova",
-                   "Kalos",
-                   "Alola",
-                   }
-        tables = soup.find_all("table")
-        for tableBody in tables:
-            # not isdisjoint checks if any of the regions is in the table titles
-            # can check tables[i].th.a["title"] for Kanto-Kalos, but not Alola
-            # regions.isdisjoint(str(tables[1].th).split(" "))
-            if ((tableBody is tables[7]) or
-                (not regions.isdisjoint(str(tableBody.th).split(" ")))):
-                rows = tableBody.find_all("tr")
-                for row in rows:
-                    for link in row.find_all("a"):
-                        URL = link.get("href")
-                        if (("Pok%C3%A9mon" in URL) and
-                            ("list" not in URL)):
-                            URL = URL.replace("%27", "'")
-                            URLRE = re.compile("(/wiki/)|(_\(pok%c3%a9mon\))",
-                                               re.IGNORECASE)
-                            pokemon = re.sub(URLRE, "", URL)
-                            # Farfetch'd
-                            pokemon = pokemon.replace("%27", "'")
-                            # Nidorans
-                            pokemon = pokemon.replace("%e2%99%80", "_(f)")
-                            pokemon = pokemon.replace("%e2%99%82", "_(m)")
-                            # Flabébé
-                            pokemon = pokemon.replace("%c3%a9", "é")
-                            pokemon = pokemon.lower()
-                            pokedex[pokemon] = "{}{}".format(baseURL, URL)
+                return False
+        data = data["parse"]
+        pokedex = dict()
+        for link in data["links"]:
+            if (link["*"].endswith(" (Pokémon)")):
+                key = link["*"].replace(" (Pokémon)", "")
+                key = key.lower()
+                pokedex[key] = link["*"].replace(" ", "_")
+        try:
+            assert(len(pokedex) >= NUM_POKEMON)
+            self.pokedex = pokedex
+        except AssertionError:
+            logging.warning(f"Only {len(pokedex)} Pokemon in Pokedex")
+            logging.warning(f"Expected at least {NUM_POKEMON} Pokemon")
+
+        def supplementPokedex():
+            pokedex["derpkip"] = pokedex["mudkip"]
+            pokedex["farfetchd"] = pokedex["farfetch'd"]
+            pokedex["flabebe"] = pokedex["flabébé"]
+            pokedex["hakamoo"] = pokedex["hakamo-o"]
+            pokedex["hakamo o"] = pokedex["hakamo-o"]
+            pokedex["hooh"] = pokedex["ho-oh"]
+            pokedex["ho oh"] = pokedex["ho-oh"]
+            pokedex["jangmoo"] = pokedex["jangmo-o"]
+            pokedex["jangmo o"] = pokedex["jangmo-o"]
+            pokedex["kommoo"] = pokedex["kommo-o"]
+            pokedex["kommo o"] = pokedex["kommo-o"]
+            pokedex["mime jr"] = pokedex["mime jr."]
+            pokedex["mr mime"] = pokedex["mr. mime"]
+            pokedex["nidoran ♀"] = pokedex["nidoran♀"]
+            pokedex["nidoran f"] = pokedex["nidoran♀"]
+            pokedex["nidoranf"] = pokedex["nidoran♀"]
+            pokedex["nidoran ♂"] = pokedex["nidoran♂"]
+            pokedex["nidoran m"] = pokedex["nidoran♂"]
+            pokedex["nidoranm"] = pokedex["nidoran♂"]
+            pokedex["porygon z"] = pokedex["porygon-z"]
+            pokedex["porygonz"] = pokedex["porygon-z"]
+            pokedex["type null"] = pokedex["type: null"]
+
+        try:
+            supplementPokedex()
+        except Exception as e:
+            logging.warning("Something went wrong while supplementing the " +
+                            "Pokedex...")
+            logging.warning(e)
         self.pokedex = pokedex
-        saveDict(pokedex, "asyncPokedex.json", "")
-        return
+        try:
+            saveDict(pokedex, "asyncPokedex.json", "")
+        except Exception as e:
+            logging.error(e)
+        return True
 
     @commands.command()
     async def pokemon(self, ctx, *search: str):
@@ -455,59 +477,35 @@ Error getting National Pokedex number for {}\
         errorMsg = ["Invalid Pokemon '{}' specified.".format(" ".join(search)),
                     "Please specify a valid Pokemon to look up."]
         if (len(search) < 1):
-            await ctx.send("```{0[1]}```".format(errorMsg))
+            await ctx.send(f"```{errorMsg[1]}```")
             return
-        # Share a client session so it will not open a new session for each request
+        # Share a client session so it will not open a new session for each
+        # request
         async with aiohttp.ClientSession() as session:
             # Setup the dictionary with all of the URL's first
             if (self.pokedex is None):
-                await self._getPokeURLs(session)
-            species = "_".join(search).lower()
-            species = species.replace("mega_", "")
-            URL = ""
+                # await self._getPokeURLs(session)
+                pokedexSuccess = await self._getPokedex(session)
+                if (not pokedexSuccess):
+                    return
+            species = " ".join(search).lower()
+            species = species.replace("mega ", "")
             pokemon = ""
-            # TODO: LOOK INTO MAKING THESE DICTIONARY ENTRIES INSTEAD OF CONDITIONALS
             if (species in self.pokedex):
                 pokemon = species
-            elif (species == "derpkip"):
-                pokemon = "mudkip"
-            elif (species == "farfetchd"):
-                pokemon = "farfetch'd"
-            elif (species == "flabebe"):
-                pokemon = "flabébé"
-            elif ((species == "hakamoo") or (species == "hakamo_o")):
-                pokemon = "hakamo-o"
-            elif ((species == "ho_oh") or (species == "hooh")):
-                pokemon = "ho-oh"
-            elif ((species == "jangmoo") or (species == "jangmo_o")):
-                pokemon = "jangmo-o"
-            elif ((species == "kommoo") or (species == "kommo_o")):
-                pokemon = "kommo-o"
-            elif (species == "mime_jr"):
-                pokemon = "mime_jr."
-            elif (species == "mr_mime"):
-                pokemon = "mr._mime"
-            elif ((species == "porygon_z") or (species == "porygonz")):
-                pokemon = "porygon-z"
-            elif (species == "type_null"):
-                pokemon = "type:_null"
             elif (species == "nidoran"):
-                await ctx.send("""```Please specify either Nidoran (F) or\
- Nidoran (M).```""")
+                await ctx.send("```Please specify either Nidoran F or " +
+                               "Nidoran M.```")
                 return
-            elif (species == "nidoran_f"):
-                pokemon = "nidoran_(f)"
-            elif (species == "nidoran_m"):
-                pokemon = "nidoran_(m)"
             else:
-                await ctx.send("```{0[0]} {0[1]}```".format(errorMsg))
+                await ctx.send(f"```{errorMsg[0]} {errorMsg[1]}```")
                 return
             # Get the Bulbapedia URL
-            URL = self.pokedex[pokemon]
+            url = f"{BASE_URL}/wiki/{self.pokedex[pokemon]}"
             # Get the Bulbapedia page
-            async with session.get(URL) as response:
+            async with session.get(url) as response:
                 try:
-                    assert(response.status == 200)
+                    assert(response.status == HTTP_OK)
                     data = await response.read()
                 except Exception as e:
                     logging.error(e)
@@ -518,11 +516,12 @@ Error getting National Pokedex number for {}\
         except Exception as e:
             logging.error(e)
             return
+        pokemon = self.pokedex[pokemon].replace("_(Pokémon)", "")
         # Get the Pokemon's information from the BeautifulSoup object
         pokeDict = self._getPokeData(soup, pokemon)
         if (not pokeDict):
-            logging.error("""Something went wrong while getting data from the \
-BeautifulSoup object for the Pokemon '{}'.""".format(pokemon))
+            logging.error("Something went wrong while getting data from the " +
+                          f"BeautifulSoup object for the Pokemon '{pokemon}'.")
             return
         pokeEmbed = self._createDiscordEmbed(pokeDict, pokemon)
         await ctx.send(embed=pokeEmbed)
